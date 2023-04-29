@@ -1,6 +1,10 @@
 gdrive_creds.json
 config.py
 
+pdf/
+txt/
+bibtex/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

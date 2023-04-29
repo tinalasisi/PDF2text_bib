@@ -3,7 +3,7 @@
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+from google.oauth2.service_account import Credentials  # Update this line
 from difflib import get_close_matches
 import io
 
@@ -24,20 +24,32 @@ def download_pdf(drive_service, file_id, filename):
         status, done = downloader.next_chunk()
         print("Download %d%%." % int(status.progress() * 100))
 
-def find_closest_match(drive_service, pattern):
-    first_letter = pattern.split('-')[0][0].lower()  # get first letter of "firstauthor"
-    subfolder_id = find_subfolder(drive_service, first_letter, FOLDER_ID)
-    if subfolder_id is None:
-        return None
-    file_id = find_subfolder(drive_service, pattern.split('-')[0], subfolder_id)
-    return file_id
 
-def find_subfolder(drive_service, folder_name, parent_id):
-    results = drive_service.files().list(q=f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and name contains '{folder_name}'", spaces='drive', fields='files(id, name)').execute()
+def find_file(drive_service, filename):
+    # Query files with filename wildcard
+    results = drive_service.files().list(
+        q=f"name contains '{filename}' and mimeType='application/pdf'", 
+        spaces='drive', 
+        fields='files(id, name)'
+    ).execute()
+
     items = results.get('files', [])
-    for item in items:
-        if item['name'].lower() == folder_name.lower():
-            return item['id']
-        else:
-            return find_subfolder(drive_service, folder_name, item['id'])
+    if items:  # If any items are found
+        return items[0]['id']  # Return ID of first match
     return None
+
+
+def find_closest_match(drive_service, pattern):
+    pattern_parts = pattern.split('-')
+    
+    for i in range(len(pattern_parts), 0, -1):
+        partial_pattern = '-'.join(pattern_parts[:i])
+        file_id = find_file(drive_service, partial_pattern)
+        if file_id is not None:
+            return file_id
+        else:
+            print(f"No file found for {partial_pattern}")
+    return None
+
+
+
