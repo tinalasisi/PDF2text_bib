@@ -14,8 +14,9 @@ class TestbibtexProcessing(unittest.TestCase):
         # Delete temporary directory and its contents
         self.temp_dir.cleanup()
         
-        # Delete filenames.txt file
-        os.remove(os.path.join('workspace/bibtex', 'filenames.txt'))
+        # Delete filenames.txt file if exists
+        if os.path.exists(os.path.join('workspace/bibtex', 'filenames.txt')):
+            os.remove(os.path.join('workspace/bibtex', 'filenames.txt'))
 
     def test_process_bibtex(self):
         # Create temporary bibtex file in temporary directory
@@ -33,23 +34,41 @@ class TestbibtexProcessing(unittest.TestCase):
             f.write("    journal={Journal2},\n")
             f.write("    year={2021},\n")
             f.write("}\n")
+            f.write("@article{key3,\n")
+            f.write("    author={Author6},\n")
+            f.write("    title={Title3},\n")
+            f.write("    journal={Journal3},\n")
+            f.write("    year={2020},\n")
+            f.write("}\n")
 
-        # Run process_bibtex function on temporary bibtex file with mode 1
-        bibtex_processing.process_bibtex(temp_bibtex_file, mode=1)
+         # Run process_bibtex function on temporary bibtex file with mode 1
+        filenames, entries = bibtex_processing.process_bibtex(temp_bibtex_file, mode=1)
         # Check that filenames.txt file was created and has the correct contents for mode 1
         expected_filenames_mode1 = ["Author1-and-Author2_2022_Title1.pdf", 
-                                     "Author3-et-al_2021_Title2.pdf"]
+                                     "Author3-et-al_2021_Title2.pdf",
+                                     "Author6_2020_Title3.pdf"]
         with open(os.path.join('workspace/bibtex', 'filenames.txt'), 'r') as f:
             lines = f.read().splitlines()
             self.assertListEqual(lines, expected_filenames_mode1, 
                                  "The output filenames did not match the expected filenames for mode 1.")
+        
+        # Assert that filenames and entries are correctly returned
+        self.assertListEqual(filenames, expected_filenames_mode1, "Returned filenames did not match expected filenames.")
+        self.assertIsInstance(entries, list, "Entries is not a list.")
+        self.assertEqual(len(entries), 3, "Number of entries is not correct.")
 
         # Run process_bibtex function on temporary bibtex file with mode 2
-        bibtex_processing.process_bibtex(temp_bibtex_file, mode=2)
+        filenames, entries = bibtex_processing.process_bibtex(temp_bibtex_file, mode=2)
         # Check that filenames.txt file was created and has the correct contents for mode 2
         expected_filenames_mode2 = ["Author1-and-Author2_Journal1_2022_Title1.pdf", 
-                                     "Author3-et-al_Journal2_2021_Title2.pdf"]
+                                     "Author3-et-al_Journal2_2021_Title2.pdf",
+                                     "Author6_Journal3_2020_Title3.pdf"]
         with open(os.path.join('workspace/bibtex', 'filenames.txt'), 'r') as f:
             lines = f.read().splitlines()
             self.assertListEqual(lines, expected_filenames_mode2, 
                                  "The output filenames did not match the expected filenames for mode 2.")
+        
+        # Assert that filenames and entries are correctly returned
+        self.assertListEqual(filenames, expected_filenames_mode2, "Returned filenames did not match expected filenames.")
+        self.assertIsInstance(entries, list, "Entries is not a list.")
+        self.assertEqual(len(entries), 3, "Number of entries is not correct.")

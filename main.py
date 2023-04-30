@@ -3,11 +3,33 @@
 import os
 import glob
 import sys
+import re
 
 from drive_api import load_gdrive_creds, download_pdf, find_closest_match
 from pdf_processing import pdf_to_text
 from folder_checker import check_folder
-from bibtex_processing import process_bibtex
+from bibtex_processing import process_bibtex, generate_pattern
+
+
+# def clean_author_names(author_string):
+#     authors = author_string.split(' and ')
+#     last_names = [name.split(', ')[0] for name in authors]
+#     return ', '.join(last_names)
+
+def clean_author_names(author_string):
+    authors = author_string.split(' and ')
+    last_names = [name.split(', ')[0] for name in authors]
+    if len(authors) == 1:
+        return last_names[0]
+    elif len(authors) == 2:
+        return f"{last_names[0]} and {last_names[1]}"
+    else:
+        return f"{last_names[0]} et al."
+
+
+def remove_bibtex_formats(title):
+    return title.replace('{', '').replace('}', '')
+
 
 workspace_path = os.path.join(os.getcwd(), 'workspace')
 bibtex_folder_path = os.path.join(workspace_path, 'bibtex')
@@ -32,14 +54,11 @@ if not bib_files:
 
 print("Found .bib file.")
 
-# Generate a list of filenames from the .bib file
+# Generate a list of filenames from the .bib file and save the entries
 print("Generating filenames from .bib file...")
-process_bibtex(bib_files[0])
+filenames, entries = process_bibtex(bib_files[0])
+entries_dict = {filename + '.pdf': entry for filename, entry in zip(filenames, entries)}
 print("Done generating filenames.")
-
-# Load filenames from 'filenames.txt' file
-with open(os.path.join(bibtex_folder_path, 'filenames.txt'), 'r') as f:
-    filenames = [line.strip() for line in f]
 
 # Initialize the Google Drive service
 print("Initializing Google Drive service...")
@@ -51,7 +70,7 @@ print("Downloading PDFs...")
 for filename in filenames:
     file_id = find_closest_match(drive_service, filename)
     if file_id:
-        download_pdf(drive_service, file_id, os.path.join(pdf_folder_path, filename))
+        download_pdf(drive_service, file_id, os.path.join(pdf_folder_path, filename + '.pdf'))
 print("Done downloading PDFs.")
 
 # Convert each PDF to a txt file and save it in the 'txt' folder
@@ -60,5 +79,42 @@ pdf_files = glob.glob(os.path.join(pdf_folder_path, "*.pdf"))
 for pdf_file in pdf_files:
     txt_filename = os.path.splitext(os.path.basename(pdf_file))[0] + '.txt'
     txt_filepath = os.path.join(txt_folder_path, txt_filename)
-    pdf_to_text(pdf_file, txt_filepath)
+    
+    # Extract entry data
+    entry = entries_dict.get(os.path.basename(pdf_file))
+    if entry is None:
+        print(f"No entry found for {os.path.basename(pdf_file)}. Skipping this file.")
+        continue
+
+    authors = clean_author_names(entry['author'])
+    journal = entry['journal']
+    year = entry['year']
+    title = remove_bibtex_formats(entry['title'])
+
+    # preamble = f"This is an article by {authors} published in {journal} in {year} entitled {title}. \n \n"
+    preamble = f"This is an article by {authors} published in {journal} in {year} entitled {title}"
+    preamble = re.sub('\s+', ' ', preamble) + '\n\n'
+
+    
+    pdf_to_text(pdf_file, txt_filepath, preamble)
+
+    # Rename txt files based on the journal and year
+    txt_files = glob.glob(os.path.join(txt_folder_path, "*.txt"))
+    for txt_file in txt_files:
+        old_name = os.path.basename(txt_file)
+        filename, ext = os.path.splitext(old_name)
+        year = re.findall(r"\d{4}", filename)[-1]
+        journal = entry['journal']
+        # Replace illegal characters with underscores
+        journal_short = re.search('\((.*?)\)', journal)
+        if journal_short is not None:
+            journal_short = journal_short.group(1).replace(':', '').replace('/', '_').rstrip().replace(' ', '_')
+        else:
+            journal_short = journal.replace(':', '').replace('/', '_').rstrip().replace(' ', '_')
+        new_name = f"{filename.rsplit('_', maxsplit=1)[0]}_{journal_short}{ext}"
+        os.rename(txt_file, os.path.join(txt_folder_path, new_name))
+    
+    
 print("Done converting PDFs to txt files.")
+
+

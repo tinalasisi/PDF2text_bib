@@ -2,10 +2,12 @@
 
 from PyPDF2 import PdfReader
 
-def pdf_to_text(pdf_path, txt_path):
+def pdf_to_text(pdf_path, txt_path, preamble=""):
     with open(pdf_path, 'rb') as pdf_file:
         reader = PdfReader(pdf_file)
         text = ''.join(page.extract_text() for page in reader.pages)
-        
-    with open(txt_path, 'w') as txt_file:
-        txt_file.write(text)
+
+    # Write text to file
+    with open(txt_path, 'w') as f:
+        f.write(preamble)
+        f.write(text)
